@@ -1,18 +1,31 @@
-CC=gcc
-CFLAGS=-I.
+# Определяем компилятор и флаги
+CC = gcc
+CFLAGS = -Wall -g -pthread
 
-TARGETS = process_memory parallel_min_max
+# Исходные файлы
+SRCS = parallel_sum.c sum.c utils.c
+# Объектные файлы
+OBJS = $(SRCS:.c=.o)
+# Имя исполняемого файла
+TARGET = psum
 
-parallel_min_max : utils.o find_min_max.o utils.h find_min_max.h
-	$(CC) -o parallel_min_max utils.o find_min_max.o parallel_min_max.c $(CFLAGS)
+# Правило по умолчанию
+all: $(TARGET)
 
-utils.o : utils.h
-	$(CC) -o utils.o -c utils.c $(CFLAGS)
+# Правило для создания исполняемого файла
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
 
-find_min_max.o : utils.h find_min_max.h
-	$(CC) -o find_min_max.o -c find_min_max.c $(CFLAGS)
+# Правило для создания объектных файлов
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-process_memory: process_memory.o
-	$(CC) -o process_memory.o -c process_memory.c $(CFLAGS)
-clean :
-	rm utils.o find_min_max.o process_memory.o parallel_min_max process_memory
+# Правило для очистки сгенерированных файлов
+clean:
+	rm -f $(OBJS) $(TARGET)
+
+# Правило для запуска программы (можно изменить аргументы по умолчанию)
+run: $(TARGET)
+	./$(TARGET) -t 4 -s 12345 -a 1000000
+
+.PHONY: all clean run
