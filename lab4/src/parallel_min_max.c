@@ -1,37 +1,39 @@
-#include <ctype.h>
-#include <limits.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <stdbool.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <getopt.h>
 #include <signal.h>
-
-#include "find_min_max.h"
-#include "utils.h"
+#include <limits.h>
 
 #define FILE_NAME_FORMAT "minmax_%d.txt"
+
+void GenerateArray(int *array, int size, int seed) {
+    srand(seed);
+    for (int i = 0; i < size; i++) {
+        array[i] = rand(); // Пример генерации случайных чисел
+    }
+}
 
 int main(int argc, char **argv) {
     int seed = -1;
     int array_size = -1;
     int pnum = -1;
     bool with_files = false;
-    int timeout = -1; // Таймаут по умолчанию не задан
+    int timeout = -1; // Таймаут по умолчанию
 
     while (true) {
-        int current_optind = optind ? optind : 1;
-
-        static struct option options[] = {{"seed", required_argument, 0, 0},
-                                           {"array_size", required_argument, 0, 0},
-                                           {"pnum", required_argument, 0, 0},
-                                           {"by_files", no_argument, 0, 'f'},
-                                           {"timeout", required_argument, 0, 0},
-                                           {0, 0, 0, 0}};
+        static struct option options[] = {
+            {"seed", required_argument, 0, 0},
+            {"array_size", required_argument, 0, 0},
+            {"pnum", required_argument, 0, 0},
+            {"by_files", no_argument, 0, 'f'},
+            {"timeout", required_argument, 0, 0}, // Добавляем опцию для таймаута
+            {0, 0, 0, 0}
+        };
 
         int option_index = 0;
         int c = getopt_long(argc, argv, "f", options, &option_index);
@@ -56,30 +58,27 @@ int main(int argc, char **argv) {
                     case 4:
                         timeout = atoi(optarg); // Получаем значение таймаута
                         break;
-
                     default:
-                        printf("Index %d is out of optionsn", option_index);
+                        printf("Index %d is out of options\n", option_index);
                 }
                 break;
             case 'f':
                 with_files = true;
                 break;
-
             case '?':
                 break;
-
             default:
-                printf("getopt returned character code 0%on", c);
+                printf("getopt returned character code 0%o\n", c);
         }
     }
 
     if (optind < argc) {
-        printf("Has at least one no option argumentn");
+        printf("Has at least one no option argument\n");
         return 1;
     }
 
     if (seed == -1 || array_size == -1 || pnum == -1) {
-         printf("Usage: %s --seed \"num\" --array_size \"num\" --pnum \"num\" \n", argv[0]);
+        printf("Usage: %s --seed \"num\" --array_size \"num\" --pnum \"num\" [--timeout \"num\"]\n", argv[0]);
         return 1;
     }
 
@@ -122,9 +121,9 @@ int main(int argc, char **argv) {
 
                 if (with_files) {
                     char filename[50];
-                    snprintf(filename, sizeof(filename), FILE_NAME_FORMAT, i);
+                   snprintf(filename, sizeof(filename), FILE_NAME_FORMAT, i);
                     FILE *file = fopen(filename, "w");
-                    fprintf(file, "%d %dn", min, max);
+                    fprintf(file, "%d %d\n", min, max);
                     fclose(file);
                 } else {
                     write(pipe_fd[1], &min, sizeof(min));
@@ -133,7 +132,7 @@ int main(int argc, char **argv) {
                 exit(0);
             }
         } else {
-            printf("Fork failed!n");
+            printf("Fork failed!\n");
             return 1;
         }
     }
@@ -145,14 +144,25 @@ int main(int argc, char **argv) {
 
     // Установка таймера на таймаут
     if (timeout > 0) {
-        alarm(timeout);
+        sleep(timeout); // Ждем указанный таймаут
+        // Отправляем SIGKILL всем дочерним процессам
+        for (int i = 0; i < active_child_processes; i++) {
+            kill(child_pids[i], SIGKILL); // Убиваем дочерние процессы по их PID
+        }
     }
 
     int global_min = INT_MAX;
     int global_max = INT_MIN;
 
+    // Чтение результатов от дочерних процессов
     for (int i = 0; i < active_child_processes; i++) {
-        if (with_files) {
+        if (!with_files) {
+            int min, max;
+            read(pipe_fd[0], &min, sizeof(min));
+            read(pipe_fd[0], &max, sizeof(max));
+            if (min < global_min) global_min = min;
+            if (max > global_max) global_max = max;
+        } else {
             char filename[50];
             snprintf(filename, sizeof(filename), FILE_NAME_FORMAT, i);
             FILE *file = fopen(filename, "r");
@@ -164,48 +174,18 @@ int main(int argc, char **argv) {
                 if (max > global_max) global_max = max;
             } else {
                 perror("Failed to open file");
-            }
-        } else {
-            int min, max;
-            read(pipe_fd[0], &min, sizeof(min));
-            read(pipe_fd[0], &max, sizeof(max));
-            if (min < global_min) global_min = min;
-            if (max > global_max) global_max = max;
-        }
-    }
-
-    // Закрываем чтение из pipe
-    if (!with_files) {
-        close(pipe_fd[0]);
-    }
-
-    // Ждем завершения всех дочерних процессов
-    for (int i = 0; i < active_child_processes; i++) {
-        // Проверяем статус процесса
-        int status;
-        pid_t result = waitpid(child_pids[i], &status, WNOHANG);
-        
-        // Если процесс все еще работает и таймаут истек
-        if (result == 0 && timeout > 0) {
-            kill(child_pids[i], SIGKILL); // Отправляем сигнал SIGKILL
-            printf("Process %d killed due to timeout.n", child_pids[i]);
-        } else if (result > 0) {
-            // Процесс завершился корректно
-            if (WIFEXITED(status)) {
-                printf("Process %d exited with status %d.n", child_pids[i], WEXITSTATUS(status));
+                return 1;
             }
         }
     }
 
     struct timeval end_time;
     gettimeofday(&end_time, NULL);
-    
-    double elapsed_time = (end_time.tv_sec - start_time.tv_sec) +
-                          (end_time.tv_usec - start_time.tv_usec) / 1000000.0;
+    long elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000000 + (end_time.tv_usec - start_time.tv_usec);
 
-    printf("Global min: %dn", global_min);
-    printf("Global max: %dn", global_max);
-    printf("Elapsed time: %.6f secondsn", elapsed_time);
+    printf("Global min: %d\n", global_min);
+    printf("Global max: %d\n", global_max);
+    printf("Elapsed time: %ld microseconds\n", elapsed_time);
 
     free(array);
     return 0;
