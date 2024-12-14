@@ -8,15 +8,9 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <limits.h>
+#include "utils.h"
 
 #define FILE_NAME_FORMAT "minmax_%d.txt"
-
-void GenerateArray(int *array, int size, int seed) {
-    srand(seed);
-    for (int i = 0; i < size; i++) {
-        array[i] = rand(); // Пример генерации случайных чисел
-    }
-}
 
 int main(int argc, char **argv) {
     int seed = -1;
@@ -78,7 +72,7 @@ int main(int argc, char **argv) {
     }
 
     if (seed == -1 || array_size == -1 || pnum == -1) {
-        printf("Usage: %s --seed \"num\" --array_size \"num\" --pnum \"num\" [--timeout \"num\"]\n", argv[0]);
+         printf("Usage: %s --seed \"num\" --array_size \"num\" --pnum \"num\" [--timeout \"num\"] \n", argv[0]);
         return 1;
     }
 
@@ -145,9 +139,8 @@ int main(int argc, char **argv) {
     // Установка таймера на таймаут
     if (timeout > 0) {
         sleep(timeout); // Ждем указанный таймаут
-        // Отправляем SIGKILL всем дочерним процессам
         for (int i = 0; i < active_child_processes; i++) {
-            kill(child_pids[i], SIGKILL); // Убиваем дочерние процессы по их PID
+            kill(child_pids[i], SIGKILL);
         }
     }
 
