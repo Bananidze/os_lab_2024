@@ -8,16 +8,22 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define SERV_PORT 20001
-#define BUFSIZE 1024
 #define SADDR struct sockaddr
 #define SLEN sizeof(struct sockaddr_in)
 
-int main() {
+int main(int argc, char** argv) {
   int sockfd, n;
-  char mesg[BUFSIZE], ipadr[16];
   struct sockaddr_in servaddr;
   struct sockaddr_in cliaddr;
+
+  if (argc < 3) {
+    perror("Usage: udpserver <port> <buffer_size>\n");
+    return 1;
+  }
+
+  int BUFSIZE = atoi(argv[2]);
+
+  char mesg[BUFSIZE], ipadr[16];
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
     perror("socket problem");
@@ -27,7 +33,7 @@ int main() {
   memset(&servaddr, 0, SLEN);
   servaddr.sin_family = AF_INET;
   servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-  servaddr.sin_port = htons(SERV_PORT);
+  servaddr.sin_port = htons(atoi(argv[1]));
 
   if (bind(sockfd, (SADDR *)&servaddr, SLEN) < 0) {
     perror("bind problem");

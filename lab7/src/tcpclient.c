@@ -7,14 +7,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUFSIZE 100
+// #define BUFSIZE 100
 #define SADDR struct sockaddr
 #define SIZE sizeof(struct sockaddr_in)
 
 int main(int argc, char *argv[]) {
   int fd;
   int nread;
-  char buf[BUFSIZE];
   struct sockaddr_in servaddr;
   if (argc < 3) {
     printf("Too few arguments \n");
@@ -35,6 +34,10 @@ int main(int argc, char *argv[]) {
   }
 
   servaddr.sin_port = htons(atoi(argv[2]));
+
+  int BUFSIZE = atoi(argv[3]);
+  char buf[BUFSIZE];
+
 
   if (connect(fd, (SADDR *)&servaddr, SIZE) < 0) {
     perror("connect");
